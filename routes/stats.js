@@ -1,10 +1,12 @@
 const express = require("express");
 const asyncMiddleware = require("../middlewares/async");
+const authMiddleware = require("../middlewares/auth");
 const { Order } = require("../models/orders.model");
 const router = express.Router();
 
 router.get(
   "/",
+  authMiddleware,
   asyncMiddleware(async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -44,7 +46,10 @@ router.get(
       },
     ]);
 
-    const totalSales = totalSalesResult[0].totalAmountToPay;
+    let totalSales = 0;
+    if (totalSalesResult.length) {
+      totalSales = totalSalesResult[0]?.totalAmountToPay || 0;
+    }
 
     res.status(200).json({
       message: "Stats",
