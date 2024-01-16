@@ -34,10 +34,17 @@ app.use("/edibles", edibleRoutes);
 app.use("/stats", statRoutes);
 app.use(error);
 
-const PORT = process.env.PORT || 8700;
+const PORT = process.env.PORT || 8800;
 
-const server = app.listen(PORT, () => {
-  console.log(`[SERVER RUNNING ON PORT ${PORT}]`);
-});
+let server = null;
+if (process.env.NODE_ENV === "development") {
+  server = app.listen(PORT, () => {
+    console.log(`[SERVER RUNNING ON PORT ${PORT}]`);
+  });
+} else {
+  server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on PORT:${PORT}`);
+  });
+}
 
 module.exports = server;
