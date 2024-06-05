@@ -21,6 +21,7 @@ const orderSchema = new mongoose.Schema(
       default: "pending",
       enum: ["pending", "accepted", "assigned", "completed", "cancelled"],
     },
+    reason: String,
     user: {
       name: String,
       phoneNumber: String,

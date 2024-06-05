@@ -2,6 +2,7 @@ const asyncMiddleware = require("../middlewares/async");
 const express = require("express");
 const authMiddleware = require("../middlewares/auth");
 const { validate: validateOrder, Order } = require("../models/orders.model");
+const { EdiblesInventory } = require("../models/edibles.model");
 
 const router = express.Router();
 
@@ -13,6 +14,39 @@ router.post(
       return res.status(422).json({ message: error.details[0].message });
 
     const { orders, user, uuid, amountToPay } = req.body;
+
+    if (!orders || !orders.length)
+      return res.status(400).json({ message: "There is no order!" });
+
+    // TODO: validate the order, ensure all the meals are available
+    const edibles = await EdiblesInventory.find({ available: true }).select(
+      "_id name"
+    );
+
+    const orderIds = [];
+    for (let i = 0; i < orders.length; i++) {
+      for (let j of orders[i].edibles) {
+        orderIds.push(j?.edible);
+      }
+    }
+
+    const edibleIds = edibles.map((edible) => edible._id.toString());
+
+    function allOrdersAvailableInEdibles(orders) {
+      for (let i = 0; i < orders.length; i++) {
+        if (edibleIds.indexOf(orders[i].toString()) < 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    const allAvailable = allOrdersAvailableInEdibles(orderIds);
+    if (!allAvailable) {
+      return res.status(400).json({
+        message: `Please, some of the foods you ordered are not available at the moment. Do refresh and try again!`,
+      });
+    }
 
     const order = await Order.create({ orders, user, uuid, amountToPay });
 
@@ -34,7 +68,7 @@ router.get(
       createdAt: { $gte: today, $lte: endOfDay },
     })
       .populate("orders.edibles.edible")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 });
 
     res.status(200).json({ message: "Orders", orders });
   })
@@ -100,7 +134,7 @@ router.put(
   authMiddleware,
   asyncMiddleware(async (req, res) => {
     const orderId = req.params.orderId;
-    const { deliveryPerson } = req.body;
+    const { deliveryPerson, reason } = req.body;
 
     const order = await Order.findOne({ _id: orderId }).populate(
       "orders.edibles.edible"
@@ -109,11 +143,9 @@ router.put(
     if (!order) return res.status(400).json({ message: "Order not found" });
 
     if (order.status === "cancelled")
-      return res
-        .status(400)
-        .json({
-          message: `${order.deliveryPerson} already cancelled this order`,
-        });
+      return res.status(400).json({
+        message: `${order.deliveryPerson} already cancelled this order`,
+      });
 
     if (order.deliveryPerson && order.deliveryPerson !== deliveryPerson)
       return res
@@ -122,6 +154,7 @@ router.put(
 
     order.deliveryPerson = deliveryPerson;
     order.status = "cancelled";
+    order.reason = reason;
     await order.save();
 
     res.status(200).json({ message: "Order Cancelled", order });
